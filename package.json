@@ -1,0 +1,25 @@
+{
+  "name": "travel_advisories",
+  "version": "1.0.0",
+  "description": "Canada Government travael advisories microservice",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Bryan Robitaille",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "apollo-server": "^2.7.0",
+    "cheerio": "^1.0.0-rc.3",
+    "graphql": "^14.4.2",
+    "install": "^0.13.0",
+    "puppeteer": "^1.19.0",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4"
+  },
+  "devDependencies": {
+    "eslint": "^6.1.0"
+  }
+}
