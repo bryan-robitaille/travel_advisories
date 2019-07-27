@@ -5,15 +5,93 @@ const url = "https://voyage.gc.ca/destinations-imprimer/emirats-arabes-unis"
 
 const htmlFile = parse.load(fs.readFileSync("./src/result.html"));
 
-function getChildrenText(element, cheerioObject){
+function getChildrenText(element, cheerioObject, h3Heading, h4Heading){
     var array = []
-    if (cheerioObject(element).children().length > 0){
+
+    if (cheerioObject(element).children().length > 0 && element.tagName !== "p"){
         cheerioObject(element).children().each((i, elem) => {
-            array[i] = getChildrenText(elem, cheerioObject);
-        })
+            var [result, tempH3, tempH4] = getChildrenText(elem, cheerioObject, h3Heading, h4Heading);
+            if (result !== ""){
+                array[i] = result;
+            }
+            h3Heading = tempH3;
+            h4Heading = tempH4;          
+        });
+    }
+    if( element.tagName === "h3") {
+        h3Heading = cheerioObject(element).contents().text();
+        h4Heading = null;
+        return ["", h3Heading, h4Heading];
+    }
+    if( element.tagName === "h4") {
+        h4Heading = cheerioObject(element).contents().text();
+        return ["", h3Heading, h4Heading];
+    }
+
+
+    if(element.tagName === "summary"){
+        return ["", h3Heading, h4Heading] ;
     }
     var result = array.length > 0 ? array : cheerioObject(element).text();
-    return result;
+    return [result, h3Heading, h4Heading];
+}
+
+function isEmpty(obj) {
+   
+    var empty = true;
+
+    if (typeof obj === "string" || obj instanceof String){
+        return empty;
+    }
+    else{
+        const keys = Object.keys(obj);
+        keys.map((key) => {
+            if (!Number.isInteger(Number(key))){
+                empty = false && empty;
+            }
+        });
+    }
+
+    return empty;  
+
+}
+
+function flattenArray(array){
+    const keys = Object.keys(array);
+    keys.map((key) => {
+        if (Number.isInteger(Number(key)) && Array.isArray(array[key])){
+            array[key] = array[key].flat(20);
+            array[key] = array[key].filter(Boolean);
+        }
+    });
+
+    return array;
+}
+
+function flattenStructure(object){
+    for (var key in object){
+        if(object.hasOwnProperty(key)){    
+
+            ; 
+            if (!isEmpty(object[key])){
+                flattenStructure(object[key]);
+            } 
+            
+            if (Array.isArray(object[key])){
+                if (object[key].length > 0){
+                    object[key] = flattenArray(object[key]);
+                } else {
+                    delete object[key];
+                }
+
+            } 
+            
+            
+        }
+    }
+
+    return object;
+
 }
 
 function getHeadings(html){
@@ -21,21 +99,51 @@ function getHeadings(html){
     
     // Set headings
     html("main > h2").each((i, elem) => {
-        var tempH2Array = [];
-        html(elem).nextUntil("h2").each((i, elem) => {
-            var tempH3Array = [];
-            html(elem).nextUntil("h3").each((i, elem) => {
-                tempH3Array.push(getChildrenText(elem, html));
-                tempH2Array[html(elem).text()] = tempH3Array.flat(20);
-            })
-        });
-        
-        headingObject[html(elem).text()] = tempH2Array;
-    });
+        var h2Heading = html(elem).contents().text();
+        var h3Heading = null;
+        var h4Heading = null;
 
-    return headingObject;
-   
+        html(elem).nextUntil("h2").each((i, elem)=>{
+
+            let tempResult = [];
+            [tempResult, h3Heading, h4Heading] = getChildrenText(elem, html, h3Heading, h4Heading);
+            if (Array.isArray(tempResult)){
+                tempResult = [].concat.apply([], tempResult);
+            }
+            if (tempResult === "" || tempResult === typeof "undefined"){
+                return;
+            }
+
+            if (h2Heading) {
+                if(!headingObject[h2Heading]){
+                    headingObject[h2Heading] = {};
+                    headingObject[h2Heading].intro = []
+                }
+                if (h3Heading) {
+                    if(!headingObject[h2Heading][h3Heading]){
+                        headingObject[h2Heading][h3Heading] = [];
+                    }
+                    if (h4Heading) {
+                        if(!headingObject[h2Heading][h3Heading][h4Heading]){
+                            headingObject[h2Heading][h3Heading][h4Heading] = [];
+                        }
+                        headingObject[h2Heading][h3Heading][h4Heading].push(tempResult);
+                    } else {
+                        headingObject[h2Heading][h3Heading].push(tempResult);
+                    }
+                } else {
+                    headingObject[h2Heading].intro.push(tempResult);
+                }
+            } else {
+                console.log("error - No H2 heading found");
+            }
+
+        });
+    });
+    
+    return headingObject;   
 }
+
 
 function testOutput(html){
     return html("main > h2").each((i, elem) => {
@@ -66,7 +174,7 @@ function testOutput(html){
             }
 
             if( elem.tagName !== "h2" || elem.tagName !== "h3"){
-                console.log(html(elem).text().trim());
+                console.log(getChildrenText(elem, html));
             }
 
 
@@ -74,4 +182,6 @@ function testOutput(html){
     })
 }
 
-testOutput(htmlFile);
+var output = getHeadings(htmlFile);
+output = flattenStructure(output);
+return output;
