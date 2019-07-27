@@ -182,13 +182,15 @@ function testOutput(html){
     })
 }
 
-function convertToSpeech(object, text){
-    var tempText = text;
+function convertToSpeech(object){
+    var tempText = "";
     for (var key in object){
         if(object.hasOwnProperty(key)){
             if(!Number.isInteger(Number(key))){
-                tempText = tempText + key;
-                tempText = tempText + "/n" + convertToSpeech(object[key], tempText);
+                if(key !== "intro"){
+                    tempText = tempText + "\n" + key + "\n";
+                }                
+                tempText = tempText + " " + convertToSpeech(object[key]);
             } else{
                 tempText = tempText + " " + object[key];
             }
@@ -198,6 +200,21 @@ function convertToSpeech(object, text){
 }
 
 var output = getHeadings(htmlFile);
-output = flattenStructure(output);
-var result = convertToSpeech(output["Risk level(s)"], "");
-console.log(result);
+var advisoryObject= flattenStructure(output);
+
+var index = 0
+for (var key in advisoryObject){
+    if (advisoryObject.hasOwnProperty(key)){
+        if (index < 1){      
+            console.log(convertToSpeech(advisoryObject[key]));
+            index++     
+
+        }
+        else{
+
+        }
+    }
+}
+var h2Headings = Object.keys(advisoryObject);
+h2Headings.shift();
+console.log(`Would you like to know about: ${h2Headings}`);

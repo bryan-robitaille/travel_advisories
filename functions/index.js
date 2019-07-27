@@ -14,13 +14,21 @@ function randomPick(array){
     return array[Math.floor(Math.random()*array.length)];
 }
 
-function convertToSpeech(oject){
-    var text = ""
-    for (var key in oject){
-        if(object.hasOwnProperty(key) && Number.isInteger(Number(key)) ){
-            text = text + oject[key];
+function convertToSpeech(object){
+    var tempText = "";
+    for (var key in object){
+        if(object.hasOwnProperty(key)){
+            if(!Number.isInteger(Number(key))){
+                if(key !== "intro"){
+                    tempText = tempText + " \n " + key + " \n ";
+                }                
+                tempText = tempText + " " + convertToSpeech(object[key]);
+            } else{
+                tempText = tempText + " " + object[key];
+            }
         }
     }
+    return tempText;
 }
 
 
@@ -41,20 +49,21 @@ app.intent('Default Welcome Intent', (conv) => {
 app.intent('country', (conv, parameters) => {
 
     const advisoryObject = getWebPage(parameters["geo-country"]);
-
+    var index = 0
     for (var key in advisoryObject){
-        var index = 0
         if (advisoryObject.hasOwnProperty(key)){
-            if (index < 1){
-                conv.ask(JSON.stringify(advisoryObject[key]));
-            }
-            else{
-                var h2Headings = Object.keys(advisoryObject);
-                h2Headings.shift();
-                conv.ask(`Would you like to know about: ${h2Headings}`);
+            if (index < 1){         
+                conv.ask(convertToSpeech(advisoryObject[key]));
+                index++       
+
             }
         }
     }
+    var h2Headings = Object.keys(advisoryObject);
+    h2Headings.shift();
+    conv.ask(`Would you like to know about: ${h2Headings}`);
+    conv.ask(new Sugesstions(h2Headings))
+
 });
 
 
