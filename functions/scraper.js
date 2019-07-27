@@ -1,9 +1,9 @@
-const requestPromise = require("request-promise");
-const parse = require("cheerio");
+const request = require("request-promise");
 const fs = require("fs");
-const url = "https://voyage.gc.ca/destinations-imprimer/emirats-arabes-unis"
+const parse = require("cheerio");
+const url = "https://travel.gc.ca/destinations-print/"
 
-const htmlFile = parse.load(fs.readFileSync("./functions/result.html"));
+const htmlFile = parse.load(fs.readFileSync("./result.html"));
 
 function getChildrenText(element, cheerioObject, h3Heading, h4Heading){
     var array = []
@@ -72,7 +72,7 @@ function flattenStructure(object){
     for (var key in object){
         if(object.hasOwnProperty(key)){    
 
-            ; 
+             
             if (!isEmpty(object[key])){
                 flattenStructure(object[key]);
             } 
@@ -141,63 +141,20 @@ function getHeadings(html){
         });
     });
     
-    return headingObject;   
+    return flattenStructure(headingObject);   
 }
 
-
-function testOutput(html){
-    return html("main > h2").each((i, elem) => {
-        html(elem).nextUntil("h2").each((i, elem)=>{
-            if (elem.tagName === "h2") {
-                console.log("___________________");
-                console.log(html(elem).contents().text());
-                console.log("___________________");
-                return;
-            }
-            if( elem.tagName === "h3") {
-                    console.log("*******************");
-                    console.log(html(elem).contents().text());
-                    console.log("*******************");
-                    return;
-            }
-            if( elem.tagName === "h4") {
-                console.log("///////////////////");
-                console.log(html(elem).contents().text());
-                console.log("///////////////////");
-                return;
-            }
-            if( elem.tagName === "h5") {
-                console.log("~~~~~~~~~~~~~~~~~~~");
-                console.log(html(elem).contents().text());
-                console.log("~~~~~~~~~~~~~~~~~~~");
-                return;
-            }
-
-            if( elem.tagName !== "h2" || elem.tagName !== "h3"){
-                console.log(getChildrenText(elem, html));
-            }
-
-
-        })
-    })
+function getWebPage(country){
+    var urlSafeCountry = country.replace(/\s+/g, '-').toLowerCase();
+    travelUrl = url + urlSafeCountry;
+    /*
+    return request(travelUrl).then((html) => {
+        return getHeadings(parse.load(html));
+    });
+    */
+   return getHeadings(htmlFile);
 }
 
-function convertToSpeech(object, text){
-    var tempText = text;
-    for (var key in object){
-        if(object.hasOwnProperty(key)){
-            if(!Number.isInteger(Number(key))){
-                tempText = tempText + key;
-                tempText = tempText + "/n" + convertToSpeech(object[key], tempText);
-            } else{
-                tempText = tempText + " " + object[key];
-            }
-        }
-    }
-    return tempText;
+module.exports = {
+    getWebPage
 }
-
-var output = getHeadings(htmlFile);
-output = flattenStructure(output);
-var result = convertToSpeech(output["Risk level(s)"], "");
-console.log(result);
