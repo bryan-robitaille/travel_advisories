@@ -3,7 +3,7 @@ const { gql } = require("apollo-server");
 const schema = gql`
 
 type Query {
-    advisories(countryName: String!): Advisory!
+    advisories(countryName: String!, language: String!): Advisory!
 }
 
 type Advisory {
