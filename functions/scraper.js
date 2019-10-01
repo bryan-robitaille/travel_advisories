@@ -1,39 +1,70 @@
 const request = require("request-promise");
-const fs = require("fs");
 const parse = require("cheerio");
+const htmlToText = require("html-to-text");
 const url = "https://travel.gc.ca/destinations-print/"
 
-const htmlFile = parse.load(fs.readFileSync("./result.html"));
+const tagTypes = ["p","ul"];
+const discardTagTypes = ["section"];
 
-function getChildrenText(element, cheerioObject, h3Heading, h4Heading){
-    var array = []
+function convertText(element){
+    var text = global.cheerioInstance.html(element)
+    var tempText = htmlToText.fromString(text, {
+        wordwrap: null,
+        hideLinkHrefIfSameAsText: true,
+        singleNewLineParagraphs: true,
+        ignoreHref: true,
+        ignoreImage: true,
+        unorderedListItemPrefix:"~",
+    })
+    return tempText;
+}
 
-    if (cheerioObject(element).children().length > 0 && element.tagName !== "p"){
+function getChildrenWorker(element, cheerioObject, h3Heading, h4Heading, array, child = false){
+
+    if (cheerioObject(element).children().length > 0 && !tagTypes.includes(element.tagName) && !discardTagTypes.includes(element.tagName)){
+        // For each child get it's children
         cheerioObject(element).children().each((i, elem) => {
-            var [result, tempH3, tempH4] = getChildrenText(elem, cheerioObject, h3Heading, h4Heading);
-            if (result !== ""){
-                array[i] = result;
+            // Get the elements children to infinity and store in an array
+            var [result, tempH3, tempH4] = getChildrenWorker(elem, cheerioObject, h3Heading, h4Heading, array, true);
+            if (result !== null){
+                array.push([result, tempH3, tempH4]);
             }
             h3Heading = tempH3;
             h4Heading = tempH4;          
         });
     }
     if( element.tagName === "h3") {
-        h3Heading = cheerioObject(element).contents().text();
+        h3Heading = convertText(element) ;
         h4Heading = null;
-        return ["", h3Heading, h4Heading];
+        return [null, h3Heading, h4Heading];
     }
     if( element.tagName === "h4") {
-        h4Heading = cheerioObject(element).contents().text();
-        return ["", h3Heading, h4Heading];
+        h4Heading = convertText(element);
+        return [null, h3Heading, h4Heading];
     }
 
+    if(tagTypes.includes(element.tagName)){
+        var result = cheerioObject(element).text();
+        if (result !== null && typeof result !== "undefined"){
+            if (child){
+                return [convertText(element), h3Heading, h4Heading];  
+            }      
 
-    if(element.tagName === "summary"){
-        return ["", h3Heading, h4Heading] ;
+            array.push([convertText(element), h3Heading, h4Heading]);
+        }
     }
-    var result = array.length > 0 ? array : cheerioObject(element).text();
-    return [result, h3Heading, h4Heading];
+
+    return [null, h3Heading, h4Heading];
+    
+}
+function getChildrenText(element, cheerioObject, h3Heading, h4Heading){
+    var array = [];
+    
+    [result, h3Temp, h4Temp] = getChildrenWorker(element, cheerioObject, h3Heading, h4Heading, array);
+        
+    array.push([result, h3Temp, h4Temp]);
+          
+    return array;
 }
 
 function isEmpty(obj) {
@@ -49,6 +80,7 @@ function isEmpty(obj) {
             if (!Number.isInteger(Number(key))){
                 empty = false && empty;
             }
+            return key;
         });
     }
 
@@ -56,12 +88,14 @@ function isEmpty(obj) {
 
 }
 
-function flattenArray(array){
+function flattenArray(array){   
+
     const keys = Object.keys(array);
     keys.map((key) => {
         if (Number.isInteger(Number(key)) && Array.isArray(array[key])){
             array[key] = [].concat.apply([], array[key]);
             array[key] = array[key].filter(Boolean);
+            return array[key];
         }
     });
 
@@ -70,9 +104,7 @@ function flattenArray(array){
 
 function flattenStructure(object){
     for (var key in object){
-        if(object.hasOwnProperty(key)){    
-
-             
+        if(object.hasOwnProperty(key)){ 
             if (!isEmpty(object[key])){
                 flattenStructure(object[key]);
             } 
@@ -84,9 +116,7 @@ function flattenStructure(object){
                     delete object[key];
                 }
 
-            } 
-            
-            
+            }           
         }
     }
 
@@ -98,61 +128,67 @@ function getHeadings(html){
     var headingObject = {};
     
     // Set headings
-    html("main > h2").each((i, elem) => {
+    html("main > h2").each((h2HeadingElem, elem) => {
         var h2Heading = html(elem).contents().text();
         var h3Heading = null;
         var h4Heading = null;
 
-        html(elem).nextUntil("h2").each((i, elem)=>{
+        html(elem).nextUntil("h2").each((subH2HeadingElem, elem)=>{
 
-            let tempResult = [];
-            [tempResult, h3Heading, h4Heading] = getChildrenText(elem, html, h3Heading, h4Heading);
-            if (Array.isArray(tempResult)){
-                tempResult = [].concat.apply([], tempResult);
-            }
-            if (tempResult === "" || tempResult === typeof "undefined"){
-                return;
-            }
+            var childrenArray = getChildrenText(elem, html, h3Heading, h4Heading);
 
-            if (h2Heading) {
-                if(!headingObject[h2Heading]){
-                    headingObject[h2Heading] = {};
-                    headingObject[h2Heading].intro = []
+            childrenArray.forEach((child) => {
+                [text, h3Heading, h4Heading] = child;
+
+                if (text === null || text === typeof "undefined"){
+                    return;
                 }
-                if (h3Heading) {
-                    if(!headingObject[h2Heading][h3Heading]){
-                        headingObject[h2Heading][h3Heading] = [];
+
+                if (h2Heading) {
+                    if(!headingObject[h2Heading]){
+                        headingObject[h2Heading] = {};
+                        headingObject[h2Heading].intro = []
                     }
-                    if (h4Heading) {
-                        if(!headingObject[h2Heading][h3Heading][h4Heading]){
-                            headingObject[h2Heading][h3Heading][h4Heading] = [];
+                    if (h3Heading) {
+                        if(!headingObject[h2Heading][h3Heading]){
+                            headingObject[h2Heading][h3Heading] = [];
                         }
-                        headingObject[h2Heading][h3Heading][h4Heading].push(tempResult);
+                        if (h4Heading) {
+                            if(!headingObject[h2Heading][h3Heading][h4Heading]){
+                                headingObject[h2Heading][h3Heading][h4Heading] = [];
+                            }
+                            headingObject[h2Heading][h3Heading][h4Heading].push(text);
+                        } else {
+                            headingObject[h2Heading][h3Heading].push(text);
+                        }
                     } else {
-                        headingObject[h2Heading][h3Heading].push(tempResult);
+                        headingObject[h2Heading].intro.push(text);
                     }
                 } else {
-                    headingObject[h2Heading].intro.push(tempResult);
+                    console.log("error - No H2 heading found");
                 }
-            } else {
-                console.log("error - No H2 heading found");
-            }
-
+                
+            })
         });
     });
     
     return flattenStructure(headingObject);   
 }
 
-function getWebPage(country){
+async function getWebPage(country){
     var urlSafeCountry = country.replace(/\s+/g, '-').toLowerCase();
     travelUrl = url + urlSafeCountry;
-    /*
-    return request(travelUrl).then((html) => {
-        return getHeadings(parse.load(html));
-    });
-    */
-   return getHeadings(htmlFile);
+    var options = {
+        uri: travelUrl,
+        transform: async (body)=>{
+            return await parse.load(body);
+        }
+    };
+
+    return await request(options).then(async (html) => {
+        global.cheerioInstance = html;
+        return getHeadings(html);
+    })
 }
 
 module.exports = {
